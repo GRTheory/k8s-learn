@@ -216,7 +216,7 @@ func (c *threadSafeMap) Index(indexName string, obj interface{}) ([]interface{},
 
 	list := make([]interface{}, 0, storeKeySet.Len())
 	for storeKey := range storeKeySet {
-		list = append(list, list, c.items[storeKey])
+		list = append(list, c.items[storeKey])
 	}
 	return list, nil
 }
