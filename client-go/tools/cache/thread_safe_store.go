@@ -7,7 +7,22 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type Indexer interface {
+type ThreadSafeStore interface {
+	Add(key string, obj interface{})
+	Update(key string, obj interface{})
+	Delete(key string)
+	Get(key string) (item interface{}, exists bool)
+	List() []interface{}
+	ListKeys() []string
+	Replace(map[string]interface{}, string)
+	Index(indexName string, obj interface{}) ([]interface{}, error)
+	IndexKeys(indexName, indexedValue string) ([]string, error)
+	ListIndexFuncValues(name string) []string
+	ByIndex(indexName, indexedValue string) ([]interface{}, error)
+	GetIndexers() Indexers
+
+	AddIndexers(newIndexers Indexers) error
+	Resync() error
 }
 
 type storeIndex struct {
@@ -56,6 +71,15 @@ func (i *storeIndex) getKeysByIndex(indexName, indexedValue string) (sets.String
 
 	index := i.indices[indexName]
 	return index[indexedValue], nil
+}
+
+func (i *storeIndex) getIndexValues(indexName string) []string {
+	index := i.indices[indexName]
+	names := make([]string, 0, len(index))
+	for key := range index {
+		names = append(names, key)
+	}
+	return names
 }
 
 func (i *storeIndex) addIndexers(newIndexers Indexers) error {
@@ -219,4 +243,68 @@ func (c *threadSafeMap) Index(indexName string, obj interface{}) ([]interface{},
 		list = append(list, c.items[storeKey])
 	}
 	return list, nil
+}
+
+func (c *threadSafeMap) ByIndex(indexName, indexedValue string) ([]interface{}, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	set, err := c.index.getKeysByIndex(indexName, indexedValue)
+	if err != nil {
+		return nil, err
+	}
+	list := make([]interface{}, 0, set.Len())
+	for key := range set {
+		list = append(list, c.items[key])
+	}
+
+	return list, nil
+}
+
+func (c *threadSafeMap) IndexKeys(indexName, indexedValue string) ([]string, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	set, err := c.index.getKeysByIndex(indexName, indexedValue)
+	if err != nil {
+		return nil, err
+	}
+	return set.List(), nil
+}
+
+func (c *threadSafeMap) ListIndexFuncValues(indexName string) []string {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	return c.index.getIndexValues(indexName)
+}
+
+func (c *threadSafeMap) GetIndexers() Indexers {
+	return c.index.indexers
+}
+
+func (c *threadSafeMap) AddIndexers(newIndexers Indexers) error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	if len(c.items) > 0 {
+		return fmt.Errorf("cannot add indexers to running index")
+	}
+
+	return c.index.addIndexers(newIndexers)
+}
+
+func (c *threadSafeMap) Resync() error {
+	// Nothing to do
+	return nil
+}
+
+func NewThreadSafeStore(indexers Indexers, indices Indices) ThreadSafeStore {
+	return &threadSafeMap{
+		items: map[string]interface{}{},
+		index: &storeIndex{
+			indexers: indexers,
+			indices:  indices,
+		},
+	}
 }
