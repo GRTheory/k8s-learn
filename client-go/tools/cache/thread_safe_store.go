@@ -153,3 +153,4 @@ func (c *threadSafeMap) Update(key string, obj interface{}) {
 	c.items[key] = obj
 	c.index.updateIndices(oldObject, obj, key)
 }
+
