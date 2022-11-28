@@ -146,6 +146,10 @@ type threadSafeMap struct {
 	index *storeIndex
 }
 
+func (c *threadSafeMap) Add(key string, obj interface{}) {
+	c.Update(key, obj)
+}
+
 func (c *threadSafeMap) Update(key string, obj interface{}) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -154,3 +158,65 @@ func (c *threadSafeMap) Update(key string, obj interface{}) {
 	c.index.updateIndices(oldObject, obj, key)
 }
 
+func (c *threadSafeMap) Delete(key string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if obj, exists := c.items[key]; exists {
+		c.index.updateIndices(obj, nil, key)
+		delete(c.items, key)
+	}
+}
+
+func (c *threadSafeMap) Get(key string) (item interface{}, exists bool) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	item, exists = c.items[key]
+	return item, exists
+}
+
+func (c *threadSafeMap) List() []interface{} {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	list := make([]interface{}, 0, len(c.items))
+	for _, item := range c.items {
+		list = append(list, item)
+	}
+	return list
+}
+
+func (c *threadSafeMap) ListKeys() []string {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	list := make([]string, 0, len(c.items))
+	for key := range c.items {
+		list = append(list, key)
+	}
+	return list
+}
+
+func (c *threadSafeMap) Replace(items map[string]interface{}, resourceVersion string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.items = items
+
+	c.index.reset()
+	for key, item := range c.items {
+		c.index.updateIndices(nil, item, key)
+	}
+}
+
+func (c *threadSafeMap) Index(indexName string, obj interface{}) ([]interface{}, error) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	storeKeySet, err := c.index.getKeysFromIndex(indexName, obj)
+	if err != nil {
+		return nil, err
+	}
+
+	list := make([]interface{}, 0, storeKeySet.Len())
+	for storeKey := range storeKeySet {
+		list = append(list, list, c.items[storeKey])
+	}
+	return list, nil
+}
