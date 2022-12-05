@@ -8,17 +8,17 @@ import (
 )
 
 type ThreadSafeStore interface {
-	Add(key string, obj interface{})
-	Update(key string, obj interface{})
+	Add(key string, obj any)
+	Update(key string, obj any)
 	Delete(key string)
-	Get(key string) (item interface{}, exists bool)
-	List() []interface{}
+	Get(key string) (item any, exists bool)
+	List() []any
 	ListKeys() []string
-	Replace(map[string]interface{}, string)
-	Index(indexName string, obj interface{}) ([]interface{}, error)
+	Replace(map[string]any, string)
+	Index(indexName string, obj any) ([]any, error)
 	IndexKeys(indexName, indexedValue string) ([]string, error)
 	ListIndexFuncValues(name string) []string
-	ByIndex(indexName, indexedValue string) ([]interface{}, error)
+	ByIndex(indexName, indexedValue string) ([]any, error)
 	GetIndexers() Indexers
 
 	AddIndexers(newIndexers Indexers) error
@@ -36,7 +36,7 @@ func (i *storeIndex) reset() {
 	i.indices = Indices{}
 }
 
-func (i *storeIndex) getKeysFromIndex(indexName string, obj interface{}) (sets.String, error) {
+func (i *storeIndex) getKeysFromIndex(indexName string, obj any) (sets.String, error) {
 	indexFunc := i.indexers[indexName]
 	if indexFunc == nil {
 		return nil, fmt.Errorf("Index with name %s does not exist", indexName)
@@ -96,7 +96,7 @@ func (i *storeIndex) addIndexers(newIndexers Indexers) error {
 	return nil
 }
 
-func (i *storeIndex) updateIndices(oldObj interface{}, newObj interface{}, key string) {
+func (i *storeIndex) updateIndices(oldObj any, newObj any, key string) {
 	var oldIndexValues, indexValues []string
 	var err error
 	for name, indexFunc := range i.indexers {
@@ -164,17 +164,17 @@ func (i *storeIndex) deleteKeyFromIndex(key, indexValue string, index Index) {
 
 type threadSafeMap struct {
 	lock  sync.RWMutex
-	items map[string]interface{}
+	items map[string]any
 
 	// index implements the indexing functionality
 	index *storeIndex
 }
 
-func (c *threadSafeMap) Add(key string, obj interface{}) {
+func (c *threadSafeMap) Add(key string, obj any) {
 	c.Update(key, obj)
 }
 
-func (c *threadSafeMap) Update(key string, obj interface{}) {
+func (c *threadSafeMap) Update(key string, obj any) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	oldObject := c.items[key]
@@ -191,17 +191,17 @@ func (c *threadSafeMap) Delete(key string) {
 	}
 }
 
-func (c *threadSafeMap) Get(key string) (item interface{}, exists bool) {
+func (c *threadSafeMap) Get(key string) (item any, exists bool) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	item, exists = c.items[key]
 	return item, exists
 }
 
-func (c *threadSafeMap) List() []interface{} {
+func (c *threadSafeMap) List() []any {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	list := make([]interface{}, 0, len(c.items))
+	list := make([]any, 0, len(c.items))
 	for _, item := range c.items {
 		list = append(list, item)
 	}
@@ -218,7 +218,7 @@ func (c *threadSafeMap) ListKeys() []string {
 	return list
 }
 
-func (c *threadSafeMap) Replace(items map[string]interface{}, resourceVersion string) {
+func (c *threadSafeMap) Replace(items map[string]any, resourceVersion string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.items = items
@@ -229,7 +229,7 @@ func (c *threadSafeMap) Replace(items map[string]interface{}, resourceVersion st
 	}
 }
 
-func (c *threadSafeMap) Index(indexName string, obj interface{}) ([]interface{}, error) {
+func (c *threadSafeMap) Index(indexName string, obj any) ([]any, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -238,14 +238,14 @@ func (c *threadSafeMap) Index(indexName string, obj interface{}) ([]interface{},
 		return nil, err
 	}
 
-	list := make([]interface{}, 0, storeKeySet.Len())
+	list := make([]any, 0, storeKeySet.Len())
 	for storeKey := range storeKeySet {
 		list = append(list, c.items[storeKey])
 	}
 	return list, nil
 }
 
-func (c *threadSafeMap) ByIndex(indexName, indexedValue string) ([]interface{}, error) {
+func (c *threadSafeMap) ByIndex(indexName, indexedValue string) ([]any, error) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
@@ -253,7 +253,7 @@ func (c *threadSafeMap) ByIndex(indexName, indexedValue string) ([]interface{}, 
 	if err != nil {
 		return nil, err
 	}
-	list := make([]interface{}, 0, set.Len())
+	list := make([]any, 0, set.Len())
 	for key := range set {
 		list = append(list, c.items[key])
 	}
@@ -301,7 +301,7 @@ func (c *threadSafeMap) Resync() error {
 
 func NewThreadSafeStore(indexers Indexers, indices Indices) ThreadSafeStore {
 	return &threadSafeMap{
-		items: map[string]interface{}{},
+		items: map[string]any{},
 		index: &storeIndex{
 			indexers: indexers,
 			indices:  indices,

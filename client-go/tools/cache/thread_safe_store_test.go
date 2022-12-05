@@ -82,7 +82,7 @@ func TestThreadSafeStoreIndexingFunctionsWithMultipleValues(t *testing.T) {
 	testIndexer := "testIndexer"
 
 	indexers := Indexers{
-		testIndexer: func(obj interface{}) ([]string, error) {
+		testIndexer: func(obj any) ([]string, error) {
 			return strings.Split(obj.(string), ","), nil
 		},
 	}
